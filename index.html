@@ -2,11 +2,227 @@
 <html>
 <head>
     <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <?!= include('stylesheet'); ?>
 </head>
 <body>
-
-<div id="app"></div>
+  <div x-data="app()" x-init="mount()"
+       class="page">
+    <div class="cart">
+      <div class="field">
+        <div class="field-label">
+          Vendedor
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  x-model="cart.employeeId">
+            <option>Seleccionar</option>
+            <template x-for="employee in employees" x-key="payment.id">
+              <option :value="employee.id"
+                x-text="employee.firstName"
+              ></option>
+            </template>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Producto
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  @change="selectProduct">
+            <option>Seleccionar</option>
+            <template x-for="product in products" :key="product.id">
+              <option :value="product.id" x-text="product.name"></option>
+            </template>
+          </select>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+            <template x-for="item in cart.items" :key="item.id">
+              <div class="relative mb-3">
+                <div class="bg-gray-600 text-white font-bold rounded-t px-4 py-2"
+                     x-text="item.name">
+                  Producto
+                </div>
+                <span class="absolute top-0 bottom-0 right-0 h-10 px-4 py-2"
+                      @click="cartRemove(item)">
+                  <svg class="fill-current h-6 w-6 text-white" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><title>Eliminar</title><path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/></svg>
+                </span>
+                <div class="border border-t-0 border-gray-400 rounded-b bg-gray-100 px-4 py-3 text-gray-700">
+                  <div class="w-full max-w-xs grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+                    <div class="mb-4">
+                      <label class="block text-gray-700 text-sm font-bold mb-2" for="quantity">
+                        Cantidad
+                      </label>
+                      <input class="input input-text"
+                             id="quantity"
+                             type="number"
+                             min="1"
+                             placeholder="Cantidad"
+                             @input.debounce="cartUpdateTotalAmount()"
+                             x-model="item.quantity">
+                    </div>
+                    <div class="mb-4">
+                      <label class="block text-gray-700 text-sm font-bold mb-2" for="price">
+                        Precio
+                      </label>
+                      <input class="input input-text"
+                             id="price"
+                             type="number"
+                             min="0"
+                             placeholder="Precio"
+                             @input.debounce="cartUpdateTotalAmount()"
+                             x-model="item.price">
+                    </div>
+                    <div class="mb-4">
+                      <div class="block text-gray-700 text-sm font-bold mb-2">
+                        Total
+                      </div>
+                      <div class="input input-text">
+                        S/ <span x-text="item.price * item.quantity"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        <div class="mb-4">
+          <div class="block text-gray-700 text-sm font-bold mb-2">
+            Total (Incl. IGV)
+          </div>
+          <div class="input input-text">
+            S/ <span x-text="cart.totalAmount"></span>
+          </div>
+        </div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Medio de pago
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  x-model="cart.paymentMethodId">
+            <option>Seleccionar</option>
+            <template x-for="payment in paymentMethods" x-key="payment.id">
+              <option :value="payment.id"
+                x-text="payment.name"
+              ></option>
+            </template>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Comprobante de pago
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  x-model="cart.invoiceTypeId"
+                  @change="selectInvoiceType">
+            <option>Seleccionar</option>
+            <template x-for="invoiceType in invoiceTypes" x-key="invoiceType.id">
+              <option :value="invoiceType.id"
+                x-text="invoiceType.name"
+              ></option>
+            </template>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Cliente
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  :disabled="cart.isBusinessClient"
+                  x-model="cart.client.type"
+                  @change="selectClientType">
+            <template x-for="clientType in clientTypes" x-key="clientType.id">
+              <option :value="clientType.id"
+                x-text="clientType.name"
+              ></option>
+            </template>
+          </select>
+          <input type="text"
+                 class="input input-text"
+                 placeholder="Nombres"
+                 x-model="cart.client.firstName">
+          <input type="text"
+                 class="input input-text"
+                 placeholder="Apellidos"
+                 x-model="cart.client.lastName">
+          <input type="email"
+                 class="input input-text"
+                 placeholder="Email"
+                 x-model="cart.client.email">
+          <input type="tel"
+                 class="input input-text"
+                 placeholder="Teléfono/Celular"
+                 x-model="cart.client.phone">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Documento de identidad
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  x-model="cart.documentType"
+                  :disabled="cart.isBusinessClient"
+                  @change="selectDocumentType">
+            <template x-for="documentType in documentTypes" x-key="documentType.id">
+              <option :value="documentType.id"
+                x-text="documentType.id"
+              ></option>
+            </template>
+          </select>
+          <div class="input-canvas">
+            <input type="number"
+                   class="input input-text"
+                   :placeholder="cart.documentType"
+                   x-model="cart.documentCode">
+            <span class="input-counter"
+                  x-text="cart.documentCode.length">
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Dirección de entrega
+        </div>
+        <div class="field-input">
+          <input type="text"
+                 class="input input-text"
+                 x-model="cart.deliveryAddress">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Nota
+        </div>
+        <div class="field-input">
+          <textarea type="text"
+                    class="input input-text"
+                    placeholder="Observaciones, referencias, etc."
+                    x-model="cart.note"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="options">
+      <button class="button button-group"
+              @click="newCart">
+        Nuevo
+      </button>
+      <button class="button button-group"
+              @click="send">
+        Enviar
+      </button>
+    </div>
+    <code class="w-full hidden" x-text="JSON.stringify(cart, null, 2);"></code>
+  </div>
 <?!= include('javascript'); ?>
 
 </body>

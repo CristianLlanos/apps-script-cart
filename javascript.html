@@ -1,1 +1,183 @@
 <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v2.3.5/dist/alpine.min.js" defer></script>
+<script>
+  function request(route, body) {
+    return JSON.stringify({
+      route,
+      body
+    });
+  }
+
+  function app() {
+    return {
+      products: [
+        // {
+        //   id: 1,
+        //   name: "40XIL X 30 COMPRIMIDOS",
+        //   stock: 200,
+        //   basePrice: 5,
+        //   baseCurrency: "PEN"
+        // }
+      ],
+      employees: [
+        // {id: 1, firstName: "Cristian"},
+        // {id: 2, firstName: "Lara"},
+        // {id: 3, firstName: "Cassie"}
+      ],
+      paymentMethods: [
+        // {id: 1, name: "Efectivo"},
+        // {id: 2, name: "Visa"},
+        // {id: 3, name: "Mastercard"}
+      ],
+      invoiceTypes: [
+        {id: 'boleta', name: "Boleta"},
+        {id: 'factura', name: "Factura"}
+      ],
+      documentTypes: [
+        {
+          id: 'DNI',
+          maxDigits: 8
+        },
+        {
+          id: 'RUC',
+          maxDigits: 10
+        }
+      ],
+      clientTypes: [
+        {id: "person", name: "Persona Natural"},
+        {id: "business", name: "Persona Jurídica"}
+      ],
+      invoiceFacturaId: 2,
+      documentRucId: 'RUC',
+      clientLegalId: 2,
+      cart: {
+        employeeId: null,
+        totalAmount: 0,
+        paymentMethodId: null,
+        invoiceTypeId: null,
+        isBusinessClient: false,
+        client: {
+          firstName: null,
+          lastName: null,
+          email: null,
+          phone: null
+        },
+        documentType: 'DNI',
+        documentCode: '',
+        deliveryAddress: null,
+        note: null,
+        items: []
+      },
+      mount() {
+        this.loadProducts();
+        this.loadEmployees();
+        this.loadPaymentMethods();
+      },
+      loadProducts() {
+        google.script.run
+          .withSuccessHandler((list) => {
+            this.products = list;
+          })
+          .doServe(request('product.list'));
+      },
+      loadEmployees() {
+        google.script.run
+          .withSuccessHandler((list) => {
+            this.employees = list;
+          })
+          .doServe(request('employee.list'));
+      },
+      loadPaymentMethods() {
+        google.script.run
+          .withSuccessHandler((list) => {
+            this.paymentMethods = list;
+          })
+          .doServe(request('payment.list'));
+      },
+      newCart() {
+        this.cart = {
+          employeeId: null,
+          totalAmount: 0,
+          paymentMethodId: null,
+          invoiceTypeId: null,
+          isBusinessClient: false,
+          client: {
+            firstName: null,
+            lastName: null,
+            email: null,
+            phone: null
+          },
+          documentType: 'DNI',
+          documentCode: '',
+          deliveryAddress: null,
+          note: null,
+          items: []
+        };
+      },
+      send() {
+        google.script.run
+          .withFailureHandler((error) => {
+            console.log(error);
+          })
+          .withSuccessHandler((response) => {
+            console.log(response);
+            this.newCart();
+          })
+          .doServe(request('checkout', this.cart));
+      },
+      selectProduct(e) {
+        const productId = e.target.value;
+        const item = this.cartGet(productId);
+
+        if (item) {
+          return;
+        }
+
+        const product = this.productsGet(productId)
+
+        this.cartAdd(product);
+      },
+      productsGet(productId) {
+        return this.products.find((i) => {
+          return i.id == productId;
+        });
+      },
+      cartGet(productId) {
+        return this.cart.items.find((i) => {
+          return i.id == productId;
+        });
+      },
+      cartAdd(product) {
+        this.cart.items.push({
+          ...product,
+          price: product.basePrice,
+          quantity: 1
+        });
+        this.cartUpdateTotalAmount();
+      },
+      cartRemove(product) {
+        this.cart.items.splice(this.cart.items.indexOf(product), 1);
+        this.cartUpdateTotalAmount();
+      },
+      cartUpdateTotalAmount() {
+        this.cart.totalAmount = this.cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      },
+      selectInvoiceType(e) {
+        this.cart.isBusinessClient = this.cart.invoiceTypeId == this.invoiceFacturaId;
+        if (this.cart.isBusinessClient) {
+          this.selectDocumentType({
+            target: {value: this.documentRucId}
+          });
+          this.selectClientType({
+            target: {value: this.clientLegalId}
+          });
+        }
+      },
+      selectDocumentType(e) {
+          this.cart.documentType = e.target.value;
+      },
+      selectClientType(e) {
+          this.cart.client.type = e.target.value;
+      }
+    };
+  }
+</script>
