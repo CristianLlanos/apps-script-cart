@@ -19,7 +19,23 @@
             <option>Seleccionar</option>
             <template x-for="employee in employees" x-key="payment.id">
               <option :value="employee.id"
-                x-text="employee.firstName"
+                x-text="employee.nickname"
+              ></option>
+            </template>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">
+          Moneda
+        </div>
+        <div class="field-input">
+          <select class="input select"
+                  x-model="cart.currencyId">
+            <option>Seleccionar</option>
+            <template x-for="currency in currencies" x-key="currency.id">
+              <option :value="currency.id"
+                x-text="currency.id"
               ></option>
             </template>
           </select>
@@ -30,19 +46,11 @@
           Producto
         </div>
         <div class="field-input">
-          <select class="input select"
-                  @change="selectProduct">
-            <option>Seleccionar</option>
-            <template x-for="product in products" :key="product.id">
-              <option :value="product.id" x-text="product.name"></option>
-            </template>
-          </select>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-            <template x-for="item in cart.items" :key="item.id">
+            <template x-for="(item, index) in cart.items" :key="index">
               <div class="relative mb-3">
                 <div class="bg-gray-600 text-white font-bold rounded-t px-4 py-2"
                      x-text="item.name">
-                  Producto
                 </div>
                 <span class="absolute top-0 bottom-0 right-0 h-10 px-4 py-2"
                       @click="cartRemove(item)">
@@ -79,7 +87,7 @@
                         Total
                       </div>
                       <div class="input input-text">
-                        S/ <span x-text="item.price * item.quantity"></span>
+                        <span x-text="cart.currencyId"></span> <span x-text="item.price * item.quantity"></span>
                       </div>
                     </div>
                   </div>
@@ -87,14 +95,27 @@
               </div>
             </template>
           </div>
-        <div class="mb-4">
-          <div class="block text-gray-700 text-sm font-bold mb-2">
-            Total (Incl. IGV)
+          <div class="flex flex-col sm:flex-row">
+            <select class="input select"
+            x-model="selectedProduct">
+              <option>Seleccionar</option>
+              <template x-for="product in products" :key="product.id">
+                <option :value="product.id" x-text="product.name"></option>
+              </template>
+            </select>
+            <button class="button"
+                    @click="selectProduct">
+              Agregar
+            </button>
           </div>
-          <div class="input input-text">
-            S/ <span x-text="cart.totalAmount"></span>
+          <div class="my-4">
+            <div class="block text-gray-700 text-sm font-bold mb-2">
+              Total (Incl. IGV)
+            </div>
+            <div class="input input-text">
+              <span x-text="cart.currencyId"></span> <span x-text="cart.totalAmount"></span>
+            </div>
           </div>
-        </div>
         </div>
       </div>
       <div class="field">

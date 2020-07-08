@@ -19,10 +19,11 @@
         // }
       ],
       employees: [
-        // {id: 1, firstName: "Cristian"},
-        // {id: 2, firstName: "Lara"},
-        // {id: 3, firstName: "Cassie"}
+        // {id: 1, nickname: "Cristian"},
+        // {id: 2, nickname: "Lara"},
+        // {id: 3, nickname: "Cassie"}
       ],
+      currencies: [],
       paymentMethods: [
         // {id: 1, name: "Efectivo"},
         // {id: 2, name: "Visa"},
@@ -46,11 +47,13 @@
         {id: "person", name: "Persona Natural"},
         {id: "business", name: "Persona Jurídica"}
       ],
-      invoiceFacturaId: 2,
+      invoiceFacturaId: 'factura',
       documentRucId: 'RUC',
-      clientLegalId: 2,
+      clientBusinessId: 'business',
+      selectedProduct: null,
       cart: {
         employeeId: null,
+        currencyId: 'PEN',
         totalAmount: 0,
         paymentMethodId: null,
         invoiceTypeId: null,
@@ -71,6 +74,7 @@
         this.loadProducts();
         this.loadEmployees();
         this.loadPaymentMethods();
+        this.loadCurrencies();
       },
       loadProducts() {
         google.script.run
@@ -93,9 +97,17 @@
           })
           .doServe(request('payment.list'));
       },
+      loadCurrencies() {
+        google.script.run
+          .withSuccessHandler((list) => {
+            this.currencies = list;
+          })
+          .doServe(request('currency.list'));
+      },
       newCart() {
         this.cart = {
           employeeId: null,
+          currencyId: 'PEN',
           totalAmount: 0,
           paymentMethodId: null,
           invoiceTypeId: null,
@@ -120,19 +132,15 @@
           })
           .withSuccessHandler((response) => {
             console.log(response);
-            this.newCart();
+            // this.newCart();
           })
           .doServe(request('checkout', this.cart));
       },
-      selectProduct(e) {
-        const productId = e.target.value;
-        const item = this.cartGet(productId);
-
-        if (item) {
+      selectProduct() {
+        if (!this.selectedProduct) {
           return;
         }
-
-        const product = this.productsGet(productId)
+        const product = this.productsGet(this.selectedProduct)
 
         this.cartAdd(product);
       },
@@ -168,7 +176,7 @@
             target: {value: this.documentRucId}
           });
           this.selectClientType({
-            target: {value: this.clientLegalId}
+            target: {value: this.clientBusinessId}
           });
         }
       },
