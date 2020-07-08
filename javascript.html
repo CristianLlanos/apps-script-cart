@@ -172,19 +172,21 @@
       selectInvoiceType(e) {
         this.cart.isBusinessClient = this.cart.invoiceTypeId == this.invoiceFacturaId;
         if (this.cart.isBusinessClient) {
-          this.selectDocumentType({
-            target: {value: this.documentRucId}
-          });
           this.selectClientType({
             target: {value: this.clientBusinessId}
           });
         }
       },
-      selectDocumentType(e) {
-          this.cart.documentType = e.target.value;
-      },
       selectClientType(e) {
           this.cart.client.type = e.target.value;
+          if (this.cart.client.type == this.clientBusinessId) {
+            this.selectDocumentType({
+              target: {value: this.documentRucId}
+            });
+          }
+      },
+      selectDocumentType(e) {
+          this.cart.documentType = e.target.value;
       }
     };
   }

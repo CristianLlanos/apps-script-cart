@@ -444,7 +444,7 @@ class ErrorHandler {
     this.logger = logger;
   }
   handle(error) {
-    this.logger.error(error.message);
+    this.logger.error(error);
     return {
       message: error.message
     }
@@ -819,11 +819,6 @@ class OrderParser {
   }
   get totalAmount() {
     return this.attributes.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  }
-  createClient() {
-    return {
-      id: 'client001'
-    }
   }
   asSheetsOrder() {
     const now = new Date();
