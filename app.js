@@ -726,7 +726,7 @@ class CheckoutAction extends Action {
   saveClient(order) {
     const now = new Date();
     const client = {
-      id: Utilities.getUuid(),
+      id: Utilities.getUuid().toUpperCase(),
       employeeId: order.attributes.employeeId,
       type: order.attributes.client.type,
       firstName: order.attributes.client.firstName,
@@ -777,7 +777,7 @@ class CheckoutAction extends Action {
 
     order.attributes.items.forEach((item) => {
       values.push([
-        Utilities.getUuid(),
+        Utilities.getUuid().toUpperCase(),
         order.id,
         item.id,
         item.quantity,
@@ -803,7 +803,7 @@ class CheckoutAction extends Action {
 class OrderParser {
   constructor(attributes) {
     this.attributes = attributes;
-    this._id = Utilities.getUuid();
+    this._id = Utilities.getUuid().toUpperCase();
   }
   withClient(client) {
     this._client = client;
