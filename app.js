@@ -1,36 +1,86 @@
+function onOpen() {
+  const menu = [
+    {name: 'test', functionName: 'Confirmar despacho'}
+  ];
+  SpreadsheetApp.getActive().addMenu('More', menu);
+}
+
+function doServe(request) {
+  return App.run(request);
+}
+
 function doGet(e) {
-  // var params = JSON.stringify(e);
   return HtmlService.createTemplateFromFile('index')
       .evaluate()
       .setTitle("Pedidos")
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function onOpen() {
-  const menu = [
-    {name: 'dates', functionName: 'dates'}
-  ];
-  SpreadsheetApp.getActive().addMenu('More', menu);
-}
-
-function dates() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Employee');
-  const employeeId = 1;
-  const range = sheet.getDataRange();
-  const employeeRecord = range.getValues().find(record => {
-    return record[EMPLOYEE.id.columnId] == employeeId;
-  })
-  Browser.msgBox(JSON.stringify(employeeRecord));
-  // cell.setValue(new Date());
-}
-
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename)
       .getContent();
 }
+function test() {
+  const orders = App.container.orders;
+  const slack = App.container.slack;
+  const order = orders.current();
+  const slackThread = JSON.parse(order.slackThread);
 
-function doServe(request) {
-  return App.run(request);
+  const content = slack.chatPostMessage({
+    channel: slackThread.channel,
+    thread_ts: slackThread.ts,
+    text: 'Despachado'
+  });
+
+  order.lastEvent = 'dispatched';
+  order.updatedAt = new Date();
+  orders.update(order);
+
+  Browser.msgBox(JSON.stringify(content));
+}
+
+class Slack {
+  /**
+   * 
+   * @param {ConsoleLogger} logger
+   * @param {String} token
+   * @param {String} host
+   */
+  constructor(logger, token, host = 'https://slack.com') {
+    this.logger = logger;
+    this.token = token;
+    this.host = host;
+  }
+
+  asUrl(path) {
+    return `${this.host}/api/${path}`
+  }
+
+  asParams(payload) {
+    return {
+      method: 'post',
+      contentType: 'application/json; charset=utf-8',
+      headers: {
+        "accept": "application/json",
+        "authorization": `Bearer ${this.token}`,
+        "dataformat": "json",
+        "user-agent": "Reliese Bot"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+  }
+
+  chatPostMessage(payload) {
+    const url = this.asUrl('chat.postMessage');
+    const params = this.asParams(payload);
+
+    logger.debug('Calling ' + url);
+    const response = UrlFetchApp.fetch(url, params);
+    logger.debug('Posting ' + response.getContentText());
+
+    return JSON.parse(response.getContentText());
+  }
 }
 
 class Config {
@@ -253,20 +303,25 @@ const ORDER = {
     target: "Note",
     columnId: 8
   },
+  slackThread: {
+    attribute: "slackThread",
+    target: "Slack Thread",
+    columnId: 9
+  },
   lastEvent: {
     attribute: "lastEvent",
     target: "Last Event",
-    columnId: 9
+    columnId: 10
   },
   updatedAt: {
     attribute: "updatedAt",
     target: "Updated At",
-    columnId: 10
+    columnId: 11
   },
   createdAt: {
     attribute: "createdAt",
     target: "Created At",
-    columnId: 11
+    columnId: 12
   }
 };
 
@@ -340,27 +395,44 @@ class Container {
   constructor() {
     this._dependencies = [];
   }
+
   singleton(id, definition) {
     if (!this._dependencies[id]) {
       this._dependencies[id] = definition(this);
     }
     return this._dependencies[id];
   }
+
+  /**
+   * @returns {Container}
+   */
   get container() {
     return this.singleton('container', () => {
       return this;
     });
   }
+
+  /**
+   * @returns {Config}
+   */
   get config() {
     return this.singleton('config', () => {
       return new Config();
     });
   }
+
+  /**
+   * @returns {ConsoleLogger}
+   */
   get logger() {
     return this.singleton('logger', () => {
       return new ConsoleLogger();
     });
   }
+
+  /**
+   * @returns {EventHandler}
+   */
   get events() {
     return this.singleton('events', () => {
       return new EventHandler(
@@ -369,6 +441,10 @@ class Container {
       );
     });
   }
+
+  /**
+   * @returns {ErrorHandler}
+   */
   get errors() {
     return this.singleton('errors', () => {
       return new ErrorHandler(
@@ -376,9 +452,47 @@ class Container {
       );
     });
   }
+
+  /**
+   * @returns {Router}
+   */
   get router() {
     return this.singleton('router', () => {
       return new Router(this.container);
+    });
+  }
+
+  /**
+   * @returns {Slack}
+   */
+  get slack() {
+    return this.singleton('slack', () => {
+      return new Slack(
+        this.logger,
+        'xoxb-1247060594992-1235859724593-xXKmEizMEplXZVRnFEbnaG5A'
+      );
+    });
+  }
+
+  /**
+   * @returns {EmployeeRepository}
+   */
+  get employees() {
+    return this.singleton('employees', () => {
+      return new EmployeeRepository(
+        SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Employee')
+      );
+    });
+  }
+
+  /**
+   * @returns {OrderRepository}
+   */
+  get orders() {
+    return this.singleton('orders', () => {
+      return new OrderRepository(
+        SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Order')
+      );
     });
   }
 }
@@ -477,6 +591,9 @@ class Router {
  */
 
 class Application {
+  /**
+   * @param {Container} container
+   */
   constructor(container) {
     this.container = container;
     // this.container.singleton('app', () => this);
@@ -508,6 +625,142 @@ class Application {
     return {
       success: false,
       body: this.errors.handle(error)
+    };
+  }
+}
+
+/**
+ * Repositories
+ */
+
+class EmployeeRepository {
+  constructor(sheet) {
+    this.sheet = sheet;
+    this.allRawCache = null;
+  }
+
+  findById(id) {
+    const record = this.allRaw()
+      .find(subject => {
+        return subject[EMPLOYEE.id.columnId] == id;
+      });
+
+    if (!record) {
+      throw new Error(`Employee with id [${id}] not found`);
+    }
+
+    const employee = {
+      [EMPLOYEE.id.attribute]: record[EMPLOYEE.id.columnId],
+      [EMPLOYEE.nickname.attribute]: record[EMPLOYEE.nickname.columnId],
+      [EMPLOYEE.firstName.attribute]: record[EMPLOYEE.firstName.columnId],
+      [EMPLOYEE.lastName.attribute]: record[EMPLOYEE.lastName.columnId],
+      [EMPLOYEE.job.attribute]: record[EMPLOYEE.job.columnId],
+      [EMPLOYEE.email.attribute]: record[EMPLOYEE.email.columnId],
+      [EMPLOYEE.slackUsername.attribute]: record[EMPLOYEE.slackUsername.columnId],
+      [EMPLOYEE.createdAt.attribute]: record[EMPLOYEE.createdAt.columnId]
+    };
+
+    return employee;
+  }
+
+  allRaw() {
+    if (!this.allRawCache) {
+      const range = this.sheet.getDataRange();
+      this.allRawCache = range.getValues();
+    }
+
+    return this.allRawCache;
+  }
+}
+
+class OrderRepository {
+  constructor(sheet) {
+    this.sheet = sheet;
+    this.allRawCache = null;
+  }
+
+  findById(id) {
+    let rowId = null;
+    const record = this.allRaw()
+      .find((subject, index) => {
+        rowId = index + 1;
+        return subject[ORDER.id.columnId] == id;
+      });
+
+    if (!record) {
+      throw new Error(`Order with id [${id}] not found`);
+    }
+
+    return this.parse(rowId, record);
+  }
+
+  allRaw() {
+    if (!this.allRawCache) {
+      const range = this.sheet.getDataRange();
+      this.allRawCache = range.getValues();
+    }
+
+    return this.allRawCache;
+  }
+
+  update(resource) {
+    if (!resource.rowId) {
+      throw new Error(`Order should be assinged a rowId before updating`);
+    }
+
+    this.allRawCache = null;
+
+    const range = this.sheet.getRange(resource.rowId, 1, 1, Object.keys(ORDER).length);
+
+    return range.setValues([
+      [
+        resource[ORDER.id.attribute],
+        resource[ORDER.employeeId.attribute],
+        resource[ORDER.clientId.attribute],
+        resource[ORDER.currency.attribute],
+        resource[ORDER.amount.attribute],
+        resource[ORDER.paymentId.attribute],
+        resource[ORDER.invoiceType.attribute],
+        resource[ORDER.deliveryAddress.attribute],
+        resource[ORDER.note.attribute],
+        resource[ORDER.slackThread.attribute],
+        resource[ORDER.lastEvent.attribute],
+        resource[ORDER.updatedAt.attribute],
+        resource[ORDER.createdAt.attribute]
+      ]
+    ])
+  }
+
+  current() {
+    const rowId = this.sheet.getCurrentCell().getRow();
+
+    if (rowId == 1) {
+      throw new Error('Debes seleccionar una fila que contenga una orden');
+    }
+
+    const numberOfColumns = this.sheet.getLastColumn();
+    const range = this.sheet.getRange(rowId, 1, 1, numberOfColumns);
+    const record = range.getValues().shift();
+
+    return this.parse(rowId, record);
+  }
+
+  parse(rowId, record) {
+    return {
+      rowId,
+      [ORDER.id.attribute]: record[ORDER.id.columnId],
+      [ORDER.employeeId.attribute]: record[ORDER.employeeId.columnId],
+      [ORDER.clientId.attribute]: record[ORDER.clientId.columnId],
+      [ORDER.currency.attribute]: record[ORDER.currency.columnId],
+      [ORDER.amount.attribute]: record[ORDER.amount.columnId],
+      [ORDER.paymentId.attribute]: record[ORDER.paymentId.columnId],
+      [ORDER.invoiceType.attribute]: record[ORDER.invoiceType.columnId],
+      [ORDER.deliveryAddress.attribute]: record[ORDER.deliveryAddress.columnId],
+      [ORDER.note.attribute]: record[ORDER.note.columnId],
+      [ORDER.slackThread.attribute]: record[ORDER.slackThread.columnId],
+      [ORDER.lastEvent.attribute]: record[ORDER.lastEvent.columnId],
+      [ORDER.updatedAt.attribute]: record[ORDER.updatedAt.columnId],
+      [ORDER.createdAt.attribute]: record[ORDER.createdAt.columnId]
     };
   }
 }
@@ -548,24 +801,31 @@ class OrderPurchasedEvent {
  */
 
 class PostOrderOnSlackListener {
+  /**
+   * @param {Container} container
+   */
   constructor(container) {
     this.logger = container.logger;
+    this.employees = container.employees;
+    this.orders = container.orders;
+    this.slack = container.slack;
   }
 
   /**
    * @param {OrderPurchasedEvent} event
    */
   handle(event) {
+    const employee = this.employees.findById(event.orderEmployeeId);
     const body = {
       channel: '#orders',
-      text: 'Nuevo pedido',
+      text: `Nuevo pedido de @${employee.slackUsername}`,
       blocks: [
         {
           type: "section",
           fields: [
             {
               type: 'mrkdwn',
-              text: `*Rep*:\n${event.orderEmployeeId}`
+              text: `*Rep*:\n@${employee.slackUsername}`
             },
             {
               type: 'mrkdwn',
@@ -595,24 +855,20 @@ class PostOrderOnSlackListener {
         }
       ]
     };
-    const params = {
-      method: 'post',
-      contentType: 'application/json; charset=utf-8',
-      headers: {
-        "accept": "application/json",
-        "authorization": 'Bearer xoxb-1247060594992-1235859724593-xXKmEizMEplXZVRnFEbnaG5A',
-        "dataformat": "json",
-        "user-agent": "Reliese Bot"
-      },
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true
-    };
-    const url = 'https://slack.com/api/chat.postMessage';
-    this.logger.debug('Calling ' + url);
-    const response = UrlFetchApp.fetch(url, params);
-    this.logger.info('Posting order ' + response.getContentText());
-    const content = JSON.parse(response.getContentText());
-    return content;
+
+    const message = this.slack.chatPostMessage(body);
+
+    // Update order
+    const order = this.orders.findById(event.orderId);
+
+    order.slackThread = JSON.stringify({
+      channel: message.channel,
+      ts: message.ts
+    });
+
+    this.orders.update(order);
+
+    return message;
   }
 }
 
@@ -832,6 +1088,7 @@ class OrderParser {
       this.attributes.invoiceTypeId,
       this.attributes.deliveryAddress,
       this.attributes.note,
+      '', // Slack Thread
       'created',
       now,
       now
