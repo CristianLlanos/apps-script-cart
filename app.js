@@ -39,56 +39,16 @@ function test() {
   Browser.msgBox(JSON.stringify(content));
 }
 
-class Slack {
-  /**
-   * 
-   * @param {ConsoleLogger} logger
-   * @param {String} token
-   * @param {String} host
-   */
-  constructor(logger, token, host = 'https://slack.com') {
-    this.logger = logger;
-    this.token = token;
-    this.host = host;
-  }
-
-  asUrl(path) {
-    return `${this.host}/api/${path}`
-  }
-
-  asParams(payload) {
-    return {
-      method: 'post',
-      contentType: 'application/json; charset=utf-8',
-      headers: {
-        "accept": "application/json",
-        "authorization": `Bearer ${this.token}`,
-        "dataformat": "json",
-        "user-agent": "Reliese Bot"
-      },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    };
-  }
-
-  chatPostMessage(payload) {
-    const url = this.asUrl('chat.postMessage');
-    const params = this.asParams(payload);
-
-    logger.debug('Calling ' + url);
-    const response = UrlFetchApp.fetch(url, params);
-    logger.debug('Posting ' + response.getContentText());
-
-    return JSON.parse(response.getContentText());
-  }
-}
-
 class Config {
   get bootstrap() {
     return [
       EventServiceProvider,
       RouteServiceProvider,
     ];
+  }
+
+  get slackToken() {
+    return PropertiesService.getScriptProperties().getProperty('SLACK_TOKEN');
   }
 }
 
@@ -469,7 +429,7 @@ class Container {
     return this.singleton('slack', () => {
       return new Slack(
         this.logger,
-        'xoxb-1247060594992-1235859724593-xXKmEizMEplXZVRnFEbnaG5A'
+        this.config.slackToken
       );
     });
   }
@@ -1115,6 +1075,54 @@ class RouteServiceProvider {
     container.router.add('payment.list', PaymentListAction);
     container.router.add('currency.list', CurrencyListAction);
     container.router.add('checkout', CheckoutAction);
+  }
+}
+
+/**
+ * Third Party Integrations
+ */
+
+class Slack {
+  /**
+   *
+   * @param {ConsoleLogger} logger
+   * @param {String} token
+   * @param {String} host
+   */
+  constructor(logger, token, host = 'https://slack.com') {
+    this.logger = logger;
+    this.token = token;
+    this.host = host;
+  }
+
+  asUrl(path) {
+    return `${this.host}/api/${path}`
+  }
+
+  asParams(payload) {
+    return {
+      method: 'post',
+      contentType: 'application/json; charset=utf-8',
+      headers: {
+        "accept": "application/json",
+        "authorization": `Bearer ${this.token}`,
+        "dataformat": "json",
+        "user-agent": "Reliese Bot"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+  }
+
+  chatPostMessage(payload) {
+    const url = this.asUrl('chat.postMessage');
+    const params = this.asParams(payload);
+
+    this.logger.debug('Calling ' + url);
+    const response = UrlFetchApp.fetch(url, params);
+    this.logger.debug('Posting ' + response.getContentText());
+
+    return JSON.parse(response.getContentText());
   }
 }
 
