@@ -557,7 +557,6 @@ class Application {
    */
   constructor(container) {
     this.container = container;
-    // this.container.singleton('app', () => this);
     this.config = this.container.config;
     this.errors = this.container.errors;
     this.router = this.container.router;
