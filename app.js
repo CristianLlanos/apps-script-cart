@@ -5,10 +5,6 @@ function onOpen() {
   SpreadsheetApp.getActive().addMenu('More', menu);
 }
 
-function doServe(request) {
-  return App.run(request);
-}
-
 function doGet(e) {
   return HtmlService.createTemplateFromFile('index')
       .evaluate()
@@ -20,6 +16,11 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename)
       .getContent();
 }
+
+function doServe(request) {
+  return App.run(request);
+}
+
 function test() {
   const orders = App.container.orders;
   const slack = App.container.slack;
